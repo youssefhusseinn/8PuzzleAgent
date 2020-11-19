@@ -14,7 +14,6 @@ private:
     State* parent;
     string step;
     int cost;
-    int totalCost;
 public:
 
     State(vector<vector<int>> v, pair<int,int> emptySpace, State* parent, string step, int cost){
@@ -38,10 +37,6 @@ public:
 
     int getCost(){
         return cost;
-    }
-
-    int getTotalCost(){
-        return totalCost;
     }
 
     void print(){
@@ -107,7 +102,6 @@ void bfs(State* current){
     queue<State*> q;
     q.push(current);
     visited.insert(current->getValues());
-    int cost = 0;
     int expanded = 0;
     while(!q.empty()){
         int len = q.size();
@@ -224,25 +218,28 @@ void dfs(State* current){
 unordered_map<int,pair<int,int>> locations;
 
 int manhattanHeuristic(vector<vector<int>> v){
+    //calculate the Manhattan Distance heuristic
     int manhattanDistance = 0;
     for(int i=0;i<3;++i){
         for(int j=0;j<3;++j){
-            pair<int,int> cur = locations[v[i][j]];
-            if(cur.first!=i || cur.second!=j){
-                manhattanDistance += (abs(cur.first-i) + abs(cur.second-j));
+            //locations contains the correct places for each tile
+            pair<int,int> correct = locations[v[i][j]];
+            if(correct.first!=i || correct.second!=j){
+                manhattanDistance += (abs(correct.first-i) + abs(correct.second-j));
             }
         }
     }
     return manhattanDistance;
 }
 
-int euclideanHeuristic(vector<vector<int>> v){
+double euclideanHeuristic(vector<vector<int>> v){
+    //calculate the Euclidean Distance heuristic
     double euclideanDistance = 0;
     for(int i=0;i<3;++i){
         for(int j=0;j<3;++j){
-            pair<int,int> cur = locations[v[i][j]];
-            if(cur.first!=i && cur.second!=j){
-                euclideanDistance += (sqrt(pow(cur.first-i,2) + pow(cur.second-j,2)));
+            pair<int,int> correct = locations[v[i][j]];
+            if(correct.first!=i && correct.second!=j){
+                euclideanDistance += (sqrt(pow(correct.first-i,2) + pow(correct.second-j,2)));
             }
         }
     }
@@ -251,15 +248,17 @@ int euclideanHeuristic(vector<vector<int>> v){
 
 void astarManhattan(State* current){
     auto start = high_resolution_clock::now();
-    //int heuristics = manhattan ? manhattanHeuristic(current->getValues()) : euclideanHeuristic(current->getValues());
     visited.insert(current->getValues());
     int expanded = 0;
-    priority_queue<pair<int,State*>, vector<pair<int,State*>>, greater< pair<int, State*> > > pq;
+    map<vector<vector<int>>,int> distance;
+    distance[current->getValues()] = 0;
+    //creating priority queue of pairs to sort with the total cost f(n) = g(n) + h(n)
+    priority_queue<pair<int,State*>, vector<pair<int,State*>>, greater<pair<int, State*> > > pq;
     pq.push({manhattanHeuristic(current->getValues())+current->getCost(),current});
     while(!pq.empty()){
         current = pq.top().second;
         pq.pop();
-        expanded++;
+        if(current->getCost() != distance[current->getValues()]) continue; ///NEW
         if (isGoal(current)) {
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(end - start);
@@ -268,14 +267,14 @@ void astarManhattan(State* current){
             foundGoal(current,expanded);
             return;
         }
-
+        expanded++;
         int i = current->getEmptySpace().first, j = current->getEmptySpace().second;
-
-        //generate all 4 new states if possible and add to queue if not visited
+        //generate all 4 new states if possible and add to queue if not visited or if a shorted path is found
         if (i > 0) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i - 1][j]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({manhattanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i - 1, j}, current,"UP",current->getCost()+1)});
             }
@@ -283,7 +282,8 @@ void astarManhattan(State* current){
         if (i < ROW - 1) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i + 1][j]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({manhattanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i + 1, j}, current,"DOWN",current->getCost()+1)});
             }
@@ -291,7 +291,8 @@ void astarManhattan(State* current){
         if (j > 0) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i][j - 1]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({manhattanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i, j - 1}, current,"LEFT",current->getCost()+1)});
             }
@@ -299,7 +300,8 @@ void astarManhattan(State* current){
         if (j < COL - 1) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i][j + 1]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({manhattanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i, j + 1}, current,"RIGHT",current->getCost()+1)});
             }
@@ -309,15 +311,19 @@ void astarManhattan(State* current){
 
 void astarEuclidean(State* current){
     auto start = high_resolution_clock::now();
-    //int heuristics = manhattan ? manhattanHeuristic(current->getValues()) : euclideanHeuristic(current->getValues());
     visited.insert(current->getValues());
     int expanded = 0;
+    map<vector<vector<int>>,double> distance;
+    distance[current->getValues()] = 0;
+    //creating priority queue of pairs to sort with the total cost f(n) = g(n) + h(n)
     priority_queue<pair<double,State*>, vector<pair<double,State*>>, greater< pair<double, State*> > > pq;
+    //pushing the root(initial) state into the priority queue
     pq.push({euclideanHeuristic(current->getValues())+current->getCost(),current});
     while(!pq.empty()){
         current = pq.top().second;
         pq.pop();
-        expanded++;
+        if(current->getCost() != distance[current->getValues()]) continue; //current state's key was decreased and reinserted
+
         if (isGoal(current)) {
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<milliseconds>(end - start);
@@ -326,14 +332,15 @@ void astarEuclidean(State* current){
             foundGoal(current,expanded);
             return;
         }
-
+        expanded++;
         int i = current->getEmptySpace().first, j = current->getEmptySpace().second;
 
-        //generate all 4 new states if possible and add to queue if not visited
+        //generate all 4 new states if possible and add to queue if not visited or if a shorted path is found
         if (i > 0) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i - 1][j]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({euclideanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i - 1, j}, current,"UP",current->getCost()+1)});
             }
@@ -341,7 +348,8 @@ void astarEuclidean(State* current){
         if (i < ROW - 1) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i + 1][j]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({euclideanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i + 1, j}, current,"DOWN",current->getCost()+1)});
             }
@@ -349,7 +357,8 @@ void astarEuclidean(State* current){
         if (j > 0) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i][j - 1]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({euclideanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i, j - 1}, current,"LEFT",current->getCost()+1)});
             }
@@ -357,7 +366,8 @@ void astarEuclidean(State* current){
         if (j < COL - 1) {
             vector<vector<int>> neighbor = current->getValues();
             swap(neighbor[i][j], neighbor[i][j + 1]);
-            if (!visited.count(neighbor)) {
+            if (!visited.count(neighbor) || distance[neighbor] > current->getCost()+1) {
+                distance[neighbor] = current->getCost()+1;
                 visited.insert(neighbor);
                 pq.push({euclideanHeuristic(neighbor)+current->getCost(),new State(neighbor, {i, j + 1}, current,"RIGHT",current->getCost()+1)});
             }
@@ -365,29 +375,6 @@ void astarEuclidean(State* current){
     }
 }
 
-
-void generateRandomly(vector<vector<int>>& initial){
-    /*unordered_set<int> taken;
-    for(int i=0;i<ROW;++i){
-        for(int j=0;j<COL;++j){
-            int num;
-            do{
-                num = rand()%9;
-            }while(taken.count(num));
-            initial[i][j] = num;
-        }
-    }*/
-    vector<int> nums = {0,1,2,3,4,5,6,7,8};
-    random_device rd;
-    mt19937 g(rd());
-    shuffle(nums.begin(),nums.end(),g);
-    int k = 0;
-    for(int i=0;i<ROW;++i){
-        for(int j=0;j<COL;++j){
-            initial[i][j] = nums[k++];
-        }
-    }
-}
 int getInvCount(vector<int> arr) {
     int inv_count = 0;
     for (int i = 0; i < 9; i++)
@@ -409,7 +396,6 @@ bool isSolvable(vector<vector<int>> p) {
 }
 int main() {
     goal = new State({{0,1,2},{3,4,5},{6,7,8}},{0,0},nullptr,"",0);
-    //goal = new State({{1,2,3},{4,5,6},{7,8,0}},{0,0},nullptr,"");
     vector<vector<int>> v(ROW, vector<int>(COL));
     locations[0]={0,0};
     locations[1]={0,1};
@@ -422,10 +408,10 @@ int main() {
     locations[8]={2,2};
     while(true){
         unsigned int choice = 0;
-        cout<<"Generate values:\n1 - Manually\n2 - Automatically\n3 - Exit\n";
+        cout<<"Generate values:\n1 - Manually\n2 - Exit\n";
         do{
             cin>>choice;
-        }while(choice != 1 && choice != 2 && choice != 3);
+        }while(choice != 1 && choice != 2);
         if(choice == 1) {
             pair<int,int> emptySpace;
             while(true){
@@ -439,14 +425,11 @@ int main() {
                 if(isSolvable(v)) break;
                 else cout << "Unsolvable state, please re-enter values.\n";
             }
-        }
-        else if(choice == 2){
-            generateRandomly(v);
         }else{
             return 0;
         }
-        State* state = new State(v,locateEmpty(v),nullptr,"INITIAL",0);
 
+        auto* state = new State(v,locateEmpty(v),nullptr,"INITIAL",0);
         choice = 0;
 
         cout << "Solve using:" << endl << "1 - BFS\n2 - DFS\n3 - A* Manhattan\n4 - A* Euclidean\n";
